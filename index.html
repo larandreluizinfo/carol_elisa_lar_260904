@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carol - Pule o Obstáculo!</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: linear-gradient(180deg, #87CEEB 0%, #98FB98 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+        }
+        h1 {
+            color: #FF69B4;
+            margin: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        #gameContainer {
+            position: relative;
+            width: 800px;
+            height: 400px;
+            border: 4px solid #FFB6C1;
+            border-radius: 10px;
+            overflow: hidden;
+            background: linear-gradient(180deg, #87CEEB 0%, #98FB98 70%, #228B22 100%);
+        }
+        canvas {
+            display: block;
+        }
+        #score {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 24px;
+            color: #FF1493;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px white;
+        }
+        #instructions {
+            margin: 10px;
+            padding: 10px;
+            background: rgba(255,182,193,0.8);
+            border-radius: 10px;
+            text-align: center;
+            color: #8B008B;
+        }
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255,20,147,0.9);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            display: none;
+            z-index: 10;
+        }
+        #gameOver h2 {
+            margin-bottom: 10px;
+        }
+        #gameOver button {
+            margin-top: 10px;
+            padding: 10px 20px;
+            font-size: 18px;
+            background: #FF69B4;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            color: white;
+        }
+        #gameOver button:hover {
+            background: #FF1493;
+        }
+    </style>
+</head>
+<body>
+    <h1>🌺 Carol no Paraíso 🐴</h1>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="800" height="400"></canvas>
+        <div id="score">Pontos: 0</div>
+        <div id="gameOver">
+            <h2>Colmeia! 🐝</h2>
+            <p>Você foi picado!</p>
+            <p>Pontos: <span id="finalScore">0</span></p>
+            <button onclick="restartGame()">Jogar Novamente</button>
+        </div>
+    </div>
+    <div id="instructions">
+        <strong>Como jogar:</strong> Pressione ESPAÇO ou clique para pular!
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const gameOverScreen = document.getElementById('gameOver');
+        const finalScoreElement = document.getElementById('finalScore');
+
+        let gameRunning = true;
+        let score = 0;
+        let gravity = 0.5;
+        let jumpForce = -12;
+
+        // Boneca (Anitta/Carol)
+        const player = {
+            x: 100,
+            y: 300,
+            width: 50,
+            height: 70,
+            velocityY: 0,
+            jumping: false
+        };
+
+        // Obstáculos (colmeias)
+        let hives = [];
+        let hiveSpeed = 5;
+        let hiveTimer = 0;
+
+        // Background elements
+        let clouds = [];
+        let flowers = [];
+        let grass = [];
+        let horses = [];
+
+        // Initialize decorations
+        for (let i = 0; i < 5; i++) {
+            clouds.push({
+                x: Math.random() * 800,
+                y: Math.random() * 100 + 20,
+                speed: Math.random() * 0.5 + 0.2
+            });
+        }
+
+        for (let i = 0; i < 20; i++) {
+            flowers.push({
+                x: Math.random() * 800,
+                y: 320 + Math.random() * 40,
+                color: ['#FF69B4', '#FF1493', '#FFB6C1', '#FFA500', '#FFFF00'][Math.floor(Math.random() * 5)],
+                size: Math.random() * 10 + 8
+            });
+        }
+
+        for (let i = 0; i < 30; i++) {
+            grass.push({
+                x: Math.random() * 800,
+                height: Math.random() * 30 + 20
+            });
+        }
+
+        for (let i = 0; i < 2; i++) {
+            horses.push({
+                x: 600 + Math.random() * 200,
+                y: 280 + Math.random() * 20,
+                speed: Math.random() * 2 + 1
+            });
+        }
+
+        function drawCloud(cloud) {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.beginPath();
+            ctx.arc(cloud.x, cloud.y, 25, 0, Math.PI * 2);
+            ctx.arc(cloud.x + 30, cloud.y - 10, 20, 0, Math.PI * 2);
+            ctx.arc(cloud.x + 50, cloud.y, 25, 0, Math.PI * 2);
+            ctx.arc(cloud.x + 25, cloud.y + 10, 20, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawFlower(flower) {
+            ctx.fillStyle = flower.color;
+            for (let i = 0; i < 5; i++) {
+                ctx.beginPath();
+                ctx.arc(
+                    flower.x + Math.cos(i * Math.PI * 2 / 5) * flower.size * 0.5,
+                    flower.y + Math.sin(i * Math.PI * 2 / 5) * flower.size * 0.5,
+                    flower.size * 0.4,
+                    0, Math.PI * 2
+                );
+                ctx.fill();
+            }
+            ctx.fillStyle = '#FFD700';
+            ctx.beginPath();
+            ctx.arc(flower.x, flower.y, flower.size * 0.3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawGrass(g) {
+            ctx.strokeStyle = '#228B22';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(g.x, 380);
+            ctx.quadraticCurveTo(g.x - 10, 380 - g.height, g.x + 5, 380 - g.height - 10);
+            ctx.stroke();
+        }
+
+        function drawHorse(horse) {
+            ctx.fillStyle = '#8B4513';
+            // Body
+            ctx.fillRect(horse.x, horse.y, 40, 25);
+            // Head
+            ctx.fillRect(horse.x + 35, horse.y - 15, 20, 20);
+            // Legs (animated)
+            let legOffset = Math.sin(Date.now() * 0.01 * horse.speed) * 5;
+            ctx.fillRect(horse.x + 5, horse.y + 25, 8, 20 + legOffset);
+            ctx.fillRect(horse.x + 25, horse.y + 25, 8, 20 - legOffset);
+            // Mane
+            ctx.fillStyle = '#654321';
+            ctx.fillRect(horse.x + 38, horse.y - 20, 12, 10);
+        }
+
+        function drawPlayer() {
+            // Corpo (vestido rosa)
+            ctx.fillStyle = '#FF69B4';
+            ctx.fillRect(player.x + 10, player.y + 25, 30, 40);
+            
+            // Cabeça
+            ctx.fillStyle = '#FDBCB4';
+            ctx.beginPath();
+            ctx.arc(player.x + 25, player.y + 15, 18, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Cabelo
+            ctx.fillStyle = '#4A2C2A';
+            ctx.beginPath();
+            ctx.arc(player.x + 25, player.y + 8, 20, Math.PI, Math.PI * 2);
+            ctx.fill();
+            ctx.fillRect(player.x + 5, player.y + 8, 15, 25);
+            ctx.fillRect(player.x + 30, player.y + 8, 15, 25);
+            
+            // Olhos
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.arc(player.x + 20, player.y + 15, 3, 0, Math.PI * 2);
+            ctx.arc(player.x + 32, player.y + 15, 3, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Sorriso
+            ctx.strokeStyle = '#FF1493';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(player.x + 25, player.y + 20, 8, 0, Math.PI);
+            ctx.stroke();
+            
+            // Bracos
+            ctx.fillStyle = '#FDBCB4';
+            ctx.fillRect(player.x, player.y + 30, 12, 8);
+            ctx.fillRect(player.x + 38, player.y + 30, 12, 8);
+            
+            // Sapatos
+            ctx.fillStyle = '#FF1493';
+            ctx.fillRect(player.x + 10, player.y + 65, 12, 8);
+            ctx.fillRect(player.x + 28, player.y + 65, 12, 8);
+        }
+
+        function drawHive(hive) {
+            // Colmeia
+            ctx.fillStyle = '#FFD700';
+            ctx.beginPath();
+            ctx.ellipse(hive.x + 25, hive.y + 20, 25, 20, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Listras
+            ctx.fillStyle = '#8B4513';
+            for (let i = 0; i < 3; i++) {
+                ctx.fillRect(hive.x + 5, hive.y + 10 + i * 12, 40, 4);
+            }
+            
+            // Abelhas
+            ctx.fillStyle = '#FFD700';
+            ctx.beginPath();
+            ctx.arc(hive.x + 10, hive.y - 5 + Math.sin(Date.now() * 0.005) * 5, 6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#000';
+            ctx.fillRect(hive.x + 4, hive.y - 6 + Math.sin(Date.now() * 0.005) * 5, 12, 2);
+        }
+
+        function update() {
+            if (!gameRunning) return;
+
+            // Gravity
+            player.velocityY += gravity;
+            player.y += player.velocityY;
+
+            if (player.y >= 300) {
+                player.y = 300;
+                player.velocityY = 0;
+                player.jumping = false;
+            }
+
+            // Clouds
+            clouds.forEach(cloud => {
+                cloud.x -= cloud.speed;
+                if (cloud.x < -100) cloud.x = 850;
+            });
+
+            // Flowers
+            flowers.forEach(flower => {
+                flower.x -= hiveSpeed * 0.3;
+                if (flower.x < -20) {
+                    flower.x = 820;
+                    flower.y = 320 + Math.random() * 40;
+                }
+            });
+
+            // Grass
+            grass.forEach(g => {
+                g.x -= hiveSpeed * 0.5;
+                if (g.x < -20) g.x = 820;
+            });
+
+            // Horses
+            horses.forEach(horse => {
+                horse.x -= horse.speed;
+                if (horse.x < -80) {
+                    horse.x = 850;
+                    horse.y = 280 + Math.random() * 20;
+                }
+            });
+
+            // Hives
+            hiveTimer++;
+            if (hiveTimer > 120) {
+                hives.push({
+                    x: 800,
+                    y: 320,
+                    width: 50,
+                    height: 40
+                });
+                hiveTimer = 0;
+            }
+
+            hives.forEach((hive, index) => {
+                hive.x -= hiveSpeed;
+
+                // Collision
+                if (player.x < hive.x + hive.width &&
+                    player.x + player.width > hive.x &&
+                    player.y < hive.y + hive.height &&
+                    player.y + player.height > hive.y) {
+                    gameOver();
+                }
+
+                // Score
+                if (hive.x + hive.width < player.x && !hive.scored) {
+                    score++;
+                    scoreElement.textContent = 'Pontos: ' + score;
+                    hive.scored = true;
+                    hiveSpeed += 0.1;
+                }
+            });
+
+            // Remove off-screen hives
+            hives = hives.filter(hive => hive.x > -50);
+
+            draw();
+            requestAnimationFrame(update);
+        }
+
+        function draw() {
+            // Background sky
+            let gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#87CEEB');
+            gradient.addColorStop(0.6, '#98FB98');
+            gradient.addColorStop(1, '#228B22');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Sun
+            ctx.fillStyle = '#FFD700';
+            ctx.beginPath();
+            ctx.arc(700, 60, 40, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#FFF8DC';
+            ctx.beginPath();
+            ctx.arc(700, 60, 30, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw decorations
+            clouds.forEach(drawCloud);
+            grass.forEach(drawGrass);
+            flowers.forEach(drawFlower);
+            horses.forEach(drawHorse);
+
+            // Ground
+            ctx.fillStyle = '#228B22';
+            ctx.fillRect(0, 370, 800, 30);
+
+            // Hives
+            hives.forEach(drawHive);
+
+            // Player
+            drawPlayer();
+        }
+
+        function jump() {
+            if (!player.jumping && gameRunning) {
+                player.velocityY = jumpForce;
+                player.jumping = true;
+            }
+        }
+
+        function gameOver() {
+            gameRunning = false;
+            finalScoreElement.textContent = score;
+            gameOverScreen.style.display = 'block';
+        }
+
+        function restartGame() {
+            player.y = 300;
+            player.velocityY = 0;
+            hives = [];
+            score = 0;
+            hiveSpeed = 5;
+            hiveTimer = 0;
+            scoreElement.textContent = 'Pontos: 0';
+            gameOverScreen.style.display = 'none';
+            gameRunning = true;
+            update();
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                jump();
+            }
+        });
+
+        canvas.addEventListener('click', jump);
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            jump();
+        });
+
+        update();
+    </script>
+</body>
+</html>
