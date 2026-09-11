@@ -109,8 +109,9 @@
 
         let gameRunning = true;
         let score = 0;
-        let gravity = 0.5;
-        let jumpForce = -12;
+        let gravity = 0.6;
+        let jumpForce = -13;
+        let autoJump = true;
 
         // Boneca (Anitta/Carol)
         const player = {
@@ -296,8 +297,6 @@
                 player.velocityY = 0;
                 player.jumping = false;
             }
-
-            // Clouds
             clouds.forEach(cloud => {
                 cloud.x -= cloud.speed;
                 if (cloud.x < -100) cloud.x = 850;
@@ -341,6 +340,14 @@
 
             hives.forEach((hive, index) => {
                 hive.x -= hiveSpeed;
+
+                // Auto jump when hive gets close
+                if (autoJump && player.y >= 300) {
+                    if (hive.x - player.x > -20 && hive.x - player.x < 110) {
+                        player.velocityY = jumpForce;
+                        player.jumping = true;
+                    }
+                }
 
                 // Collision
                 if (player.x < hive.x + hive.width &&
